@@ -13,6 +13,7 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.LongAdder;
 import java.util.stream.Collectors;
 
 /**
@@ -43,10 +44,12 @@ public class BilibiliConvertUtil {
         if (files == null) {
             return;
         }
+        long start = System.currentTimeMillis();
+        LongAdder lad = new LongAdder();
         CountDownLatch countDownLatch = new CountDownLatch(files.length);
         for (File eachFolder : files) {
             if (eachFolder.isDirectory()) {
-                transferFiles(countDownLatch, executorService, eachFolder, saveFolder);
+                transferFiles(countDownLatch, lad, executorService, eachFolder, saveFolder);
             } else {
                 countDownLatch.countDown();
             }
@@ -65,6 +68,8 @@ public class BilibiliConvertUtil {
         }
         executorService.shutdown();
         System.out.println("完成转换！");
+        System.out.println("总耗时：" + (System.currentTimeMillis() - start) + " 毫秒");
+        System.out.println("转换文件大小：" + lad.sum());
     }
 
     private static void sleep(Unsafe unsafe, int duration) {
@@ -79,7 +84,7 @@ public class BilibiliConvertUtil {
         }
     }
 
-    private static void transferFiles(CountDownLatch countDownLatch, ExecutorService executorService, File eachFolder, File saveFolder) throws Exception {
+    private static void transferFiles(CountDownLatch countDownLatch, LongAdder lad, ExecutorService executorService, File eachFolder, File saveFolder) throws Exception {
         File[] files = eachFolder.listFiles();
         if (files == null) {
             countDownLatch.countDown();
@@ -118,7 +123,7 @@ public class BilibiliConvertUtil {
                 audio.skip(9);
             }
             if (video != null && audio != null) {
-                mergeAudioAndVideo(countDownLatch, executorService, video, audio, finalFile);
+                mergeAudioAndVideo(countDownLatch, lad, executorService, video, audio, finalFile);
                 return;
             }
         }
@@ -126,12 +131,12 @@ public class BilibiliConvertUtil {
         return;
     }
 
-    private static void mergeAudioAndVideo(CountDownLatch countDownLatch, ExecutorService executorService, InputStream video, InputStream audio, File finalFile) {
+    private static void mergeAudioAndVideo(CountDownLatch countDownLatch, LongAdder lad, ExecutorService executorService, InputStream video, InputStream audio, File finalFile) {
 //        mergeAudioAndVideo(video, audio, finalFile);
         CompletableFuture.runAsync(
                 () -> {
                     try {
-                        mergeAudioAndVideo(video, audio, finalFile);
+                        mergeAudioAndVideo(lad, video, audio, finalFile);
                     } catch (Exception e) {
                         new Exception("视频" + finalFile.getName() + "合并出错", e)
                                 .printStackTrace(System.err);
@@ -141,7 +146,7 @@ public class BilibiliConvertUtil {
                 }, executorService);
     }
 
-    private static void mergeAudioAndVideo(InputStream video, InputStream audio, File finalFile) {
+    private static void mergeAudioAndVideo(LongAdder lad, InputStream video, InputStream audio, File finalFile) {
         File tmpDir = new File(finalFile.getParentFile(), "tmp");
         if (!tmpDir.exists()) {
             tmpDir.mkdirs();
@@ -193,6 +198,8 @@ public class BilibiliConvertUtil {
                     while ((len = bufferedInputStream.read(bytes)) != -1) {
                         System.out.println(new String(bytes, 0, len));
                     }
+                } else {
+                    lad.add(finalFile.length());
                 }
             } finally {
                 successThread.interrupt();
