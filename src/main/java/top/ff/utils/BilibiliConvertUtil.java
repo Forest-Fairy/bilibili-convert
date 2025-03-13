@@ -97,7 +97,7 @@ public class BilibiliConvertUtil {
         JSONObject info = JSON.parseObject(FileUtil.readString(infoFile, StandardCharsets.UTF_8));
         long videoSize = info.getLong("totalSize");
         File dir = new File(saveFolder, info.getString("uname"));
-        File finalFile = new File(dir, info.getString("title").replace(" ", "")+".mp4");
+        File finalFile = new File(dir, info.getString("p") + "-" + info.getString("title")+".mp4");
         if (finalFile.exists()) {
             if (finalFile.length() == videoSize) {
                 countDownLatch.countDown();
